@@ -161,11 +161,15 @@ void heartbeatOnBeat(){
 void heartbeatUpdate(){
   heartbeatTimeSinceLastBeat = millis() - heartbeatTimeOfLastBeat;
   debugHeartbeatPulse = 0;
-  
-  if( heartbeatTimeSinceLastBeat < HEARTBEAT_BEAT_DURATION_MS ){
-    drawHeartBeat( &strip, 255,0,0, map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_BEAT_DURATION_MS, 128, 32) );
-  }else if( heartbeatTimeSinceLastBeat < HEARTBEAT_PENDING_DURATION_MS ){
-    drawHeartBeat( &strip, 255,0,0, map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_PENDING_DURATION_MS, 32, 0) );
+
+  if( fingerMonitorHasFinger() ){
+    if( heartbeatTimeSinceLastBeat < HEARTBEAT_BEAT_DURATION_MS ){
+      drawHeartBeat( &strip, 255,0,0, map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_BEAT_DURATION_MS, 128, 32) );
+    }else if( heartbeatTimeSinceLastBeat < HEARTBEAT_PENDING_DURATION_MS ){
+      drawHeartBeat( &strip, 255,0,0, map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_PENDING_DURATION_MS, 32, 0) );
+    }
+  }else{
+    drawHeartBeat( &strip, 255,0,0, map(fingerMonitorTimeSinceLastContact(), 0, HEARTBEAT_PENDING_DURATION_MS, 32, 0) );
   }
 }
 
@@ -245,12 +249,14 @@ void hrvUpdate(){
 int robust_threshold_time_to_live = 50;
 int robost_threshold_percent = 75;
 int robust_threshold_allowed_deviation = 20;
+int robust_threshold_has_finger_min_range = 50;
 int _robust_threshold_value = 0;
 int _robust_threshold_sensor_value = 0;
 int _robust_threshold_min_sensor_value = 1024; // sensor is 10-bit
 int _robust_threshold_max_sensor_value = 0;
 int _robust_threshold_min_ttl = 0;
 int _robust_threshold_max_ttl = 0;
+int _robust_threshold_has_finger = 0;
 
 void robustThresholdUpdate(void){
   int range_change = 0;
@@ -272,9 +278,41 @@ void robustThresholdUpdate(void){
 
   if( range_change ){
     _robust_threshold_value = map( robost_threshold_percent, 0, 100, _robust_threshold_min_sensor_value, _robust_threshold_max_sensor_value );
-  pulseSensor.setThreshold( _robust_threshold_value );
+    pulseSensor.setThreshold( _robust_threshold_value );
+    
+    int min_max_range = _robust_threshold_max_sensor_value - _robust_threshold_min_sensor_value;
+    if( min_max_range > robust_threshold_has_finger_min_range ){
+      _robust_threshold_has_finger = 1;
+    }else{
+      _robust_threshold_has_finger = 0;
+    }
   }
 }
+int robustThresholdHasFinger( void ){
+  return _robust_threshold_has_finger;
+}
+
+
+int _finger_monitor_has_finger = 0;
+long _finger_monitor_last_contact_millis = 0;
+long _finger_monitor_time_since_last_contact = 0;
+void fingerMonitorUpdate( void ){
+  int has_finger = robustThresholdHasFinger();
+  if( has_finger ){
+    _finger_monitor_has_finger = 1;
+    _finger_monitor_last_contact_millis = millis();
+  }else{
+    _finger_monitor_has_finger = 0;
+    _finger_monitor_time_since_last_contact = millis() - _finger_monitor_last_contact_millis;
+  }
+}
+long fingerMonitorTimeSinceLastContact( void ){
+  return _finger_monitor_time_since_last_contact;
+}
+int fingerMonitorHasFinger( void ){
+  return _finger_monitor_has_finger;
+}
+
 
 //#ifdef SERIAL_DEBUGGING_ENABLE
 // doesnt seem to work here :( so it's just a hard-coded 0/1
@@ -310,6 +348,7 @@ void loop() {
   sendDebugInfo();
 
   robustThresholdUpdate();
+  fingerMonitorUpdate();
   breathingUpdate();
   heartbeatUpdate();
   hrvUpdate();

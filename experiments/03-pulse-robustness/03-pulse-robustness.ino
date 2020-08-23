@@ -49,12 +49,14 @@ void setup() {
 int robust_threshold_time_to_live = 50;
 int robost_threshold_percent = 75;
 int robust_threshold_allowed_deviation = 20;
+int robust_threshold_has_finger_min_range = 50;
 int _robust_threshold_value = 0;
 int _robust_threshold_sensor_value = 0;
 int _robust_threshold_min_sensor_value = 1024; // sensor is 10-bit
 int _robust_threshold_max_sensor_value = 0;
 int _robust_threshold_min_ttl = 0;
 int _robust_threshold_max_ttl = 0;
+int _robust_threshold_has_finger = 0;
 
 void robust_threshold_update(void){
   int range_change = 0;
@@ -76,18 +78,33 @@ void robust_threshold_update(void){
 
   if( range_change ){
     _robust_threshold_value = map( robost_threshold_percent, 0, 100, _robust_threshold_min_sensor_value, _robust_threshold_max_sensor_value );
-  pulseSensor.setThreshold( _robust_threshold_value );
+    pulseSensor.setThreshold( _robust_threshold_value );
+    
+    int min_max_range = _robust_threshold_max_sensor_value - _robust_threshold_min_sensor_value;
+    if( min_max_range > robust_threshold_has_finger_min_range ){
+      _robust_threshold_has_finger = 1;
+    }else{
+      _robust_threshold_has_finger = 0;
+    }
   }
 }
-
+int robust_threshold_has_finger( void ){
+  return _robust_threshold_has_finger;
+}
 
 int debug_beat_marker = 0;
+int debug_has_finger_marker = 0;
 void loop() {
 
   robust_threshold_update();
   
   if( pulseSensor.sawStartOfBeat() ){
     debug_beat_marker = 1024;
+  }
+  if( robust_threshold_has_finger() ){
+    debug_has_finger_marker = 1024;
+  }else{
+    debug_has_finger_marker = 0;
   }
 
   Serial.print(_robust_threshold_sensor_value, DEC);
@@ -99,6 +116,8 @@ void loop() {
   Serial.print(_robust_threshold_value, DEC);
   Serial.print(",");
   Serial.print(debug_beat_marker, DEC);
+  Serial.print(",");
+  Serial.print(debug_has_finger_marker, DEC);
   Serial.println();
 
   debug_beat_marker = 0;
