@@ -220,42 +220,59 @@ void hrvUpdate(){
   hrvDraw( &strip, 0, 0, 255, 255, 0, 0, map(hrvSmoothMeasure,hrvSmoothMin,hrvSmoothMax,0,255) );
 }
 
-/*
+
+/**********************************************************************
+ * Robust Adjustable Threshold for Heatbeat Detection                 *
+ **********************************************************************
+ * 
  * We keep track of the maximum and minimum sensor values for 
- * 50 samples and set the threshold to 75% of the way to the
+ * `robust_threshold_time_to_live` samples and set the threshold
+ * to `robost_threshold_percent` (default: 75%) of the way to the
  * max from the min. So if the max is 1100 and the min is 100
  * we set the threshold to 850.
+ * Adjusting the threshold provides more accurate beat detection
+ * than using a static threshold. However, there are cases were the
+ * max/min are just below/above their previous values so they
+ * "timeout" and reset to a more average value which is easily
+ * surpased by the sensor. So instead of adjusting the max/min
+ * when there is a strictly a new max/min we allow some deviation
+ * and re-set the max/min if the new max is "close enough" to the
+ * old (specifically if it's within robust_threshold_allowed_deviation
+ * of the old max/min).
+ * The other variables are for keeping track of data and should
+ * not be adjusted.
  */
-#define SENSOR_RANGE_TIME_TO_LIVE 100
-int _pulse_sensor_threshold = 0;
-int _pulse_sensor_last_value = 0;
-int _pulse_sensor_min_value = 1024; // sensor is 10-bit
-int _pulse_sensor_max_value = 0;
-int _pulse_sensor_min_ttl = 0;
-int _pulse_sensor_max_ttl = 0;
-int _allowed_extrema_deviation = 20;
+int robust_threshold_time_to_live = 50;
+int robost_threshold_percent = 75;
+int robust_threshold_allowed_deviation = 20;
+int _robust_threshold_value = 0;
+int _robust_threshold_sensor_value = 0;
+int _robust_threshold_min_sensor_value = 1024; // sensor is 10-bit
+int _robust_threshold_max_sensor_value = 0;
+int _robust_threshold_min_ttl = 0;
+int _robust_threshold_max_ttl = 0;
 
 void robustThresholdUpdate(void){
-  int _pulse_sensor_range_change = 0;
-  _pulse_sensor_last_value = pulseSensor.getLatestSample();
+  int range_change = 0;
+  _robust_threshold_sensor_value = pulseSensor.getLatestSample();
 
-  _pulse_sensor_min_ttl -= 1;
-  _pulse_sensor_max_ttl -= 1;
+  _robust_threshold_min_ttl -= 1;
+  _robust_threshold_max_ttl -= 1;
 
-  if( _pulse_sensor_last_value <= _pulse_sensor_min_value+_allowed_extrema_deviation || _pulse_sensor_min_ttl <= 0 ){
-    _pulse_sensor_min_value = _pulse_sensor_last_value;
-    _pulse_sensor_min_ttl = SENSOR_RANGE_TIME_TO_LIVE;
-    _pulse_sensor_range_change = 1;
+  if( _robust_threshold_sensor_value <= _robust_threshold_min_sensor_value+robust_threshold_allowed_deviation || _robust_threshold_min_ttl <= 0 ){
+    _robust_threshold_min_sensor_value = _robust_threshold_sensor_value;
+    _robust_threshold_min_ttl = robust_threshold_time_to_live;
+    range_change = 1;
   }
-  if( _pulse_sensor_last_value >= _pulse_sensor_max_value-_allowed_extrema_deviation || _pulse_sensor_max_ttl <= 0 ){
-    _pulse_sensor_max_value = _pulse_sensor_last_value;
-    _pulse_sensor_max_ttl = SENSOR_RANGE_TIME_TO_LIVE;
-    _pulse_sensor_range_change = 1;
+  if( _robust_threshold_sensor_value >= _robust_threshold_max_sensor_value-robust_threshold_allowed_deviation || _robust_threshold_max_ttl <= 0 ){
+    _robust_threshold_max_sensor_value = _robust_threshold_sensor_value;
+    _robust_threshold_max_ttl = robust_threshold_time_to_live;
+    range_change = 1;
   }
 
-  if( _pulse_sensor_range_change ){
-    _pulse_sensor_threshold = map( 75, 0, 100, _pulse_sensor_min_value, _pulse_sensor_max_value );
-    pulseSensor.setThreshold( _pulse_sensor_threshold );
+  if( range_change ){
+    _robust_threshold_value = map( robost_threshold_percent, 0, 100, _robust_threshold_min_sensor_value, _robust_threshold_max_sensor_value );
+  pulseSensor.setThreshold( _robust_threshold_value );
   }
 }
 
@@ -263,13 +280,13 @@ void robustThresholdUpdate(void){
 // doesnt seem to work here :( so it's just a hard-coded 0/1
 #if 1
   void sendDebugInfo( void ){
-    Serial.print(_pulse_sensor_last_value, DEC);
+    Serial.print(_robust_threshold_sensor_value, DEC);
     Serial.print(",");
-    //Serial.print(_pulse_sensor_min_value, DEC);
+    //Serial.print(_robust_threshold_min_sensor_value, DEC);
     //Serial.print(",");
-    //Serial.print(_pulse_sensor_max_value, DEC);
+    //Serial.print(_robust_threshold_max_sensor_value, DEC);
     //Serial.print(",");
-    Serial.print(_pulse_sensor_threshold, DEC);
+    Serial.print(_robust_threshold_value, DEC);
     Serial.print(",");
     Serial.print(debugHeartbeatPulse, DEC);
     Serial.println();
