@@ -1,3 +1,5 @@
+#define SERIAL_DEBUGGING_ENABLE
+
 #define USE_ARDUINO_INTERRUPTS true
 #include <PulseSensorPlayground.h>
 
@@ -20,16 +22,9 @@ PulseSensorPlayground pulseSensor;
 Adafruit_NeoPixel strip(NOEPIX_COUNT, NOEPIX_PIN, NEO_GRB + NEO_KHZ800);
 
 void setup() {
-  /*
-     Use 115200 baud because that's what the Processing Sketch expects to read,
-     and because that speed provides about 11 bytes per millisecond.
-
-     If we used a slower baud rate, we'd likely write bytes faster than
-     they can be transmitted, which would mess up the timing
-     of readSensor() calls, which would make the pulse measurement
-     not work properly.
-  */
-  Serial.begin(115200);
+  #ifdef SERIAL_DEBUGGING_ENABLE
+    Serial.begin(9600);
+  #endif
 
   strip.begin();
   strip.setBrightness(10);
@@ -144,6 +139,7 @@ void breathingUpdate(){
  */
 long heartbeatTimeOfLastBeat = 0;
 long heartbeatTimeSinceLastBeat = 0;
+int debugHeartbeatPulse = 0;
 
 #define HEARTBEAT_BEAT_DURATION_MS 200
 #define HEARTBEAT_PENDING_DURATION_MS 3000
@@ -159,17 +155,17 @@ void drawHeartBeat( const Adafruit_NeoPixel* strip, const byte red, const byte g
 
 void heartbeatOnBeat(){
   heartbeatTimeOfLastBeat = millis();
+  debugHeartbeatPulse = 1024;
 }
 
 void heartbeatUpdate(){
   heartbeatTimeSinceLastBeat = millis() - heartbeatTimeOfLastBeat;
+  debugHeartbeatPulse = 0;
   
   if( heartbeatTimeSinceLastBeat < HEARTBEAT_BEAT_DURATION_MS ){
     drawHeartBeat( &strip, 255,0,0, map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_BEAT_DURATION_MS, 128, 32) );
-    Serial.println( map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_BEAT_DURATION_MS, 128, 32), DEC );
   }else if( heartbeatTimeSinceLastBeat < HEARTBEAT_PENDING_DURATION_MS ){
     drawHeartBeat( &strip, 255,0,0, map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_PENDING_DURATION_MS, 32, 0) );
-    Serial.println( map(heartbeatTimeSinceLastBeat, 0, HEARTBEAT_PENDING_DURATION_MS, 32, 0), DEC );
   }
 }
 
@@ -230,13 +226,14 @@ void hrvUpdate(){
  * max from the min. So if the max is 1100 and the min is 100
  * we set the threshold to 850.
  */
-#define SENSOR_RANGE_TIME_TO_LIVE 50
+#define SENSOR_RANGE_TIME_TO_LIVE 100
 int _pulse_sensor_threshold = 0;
 int _pulse_sensor_last_value = 0;
 int _pulse_sensor_min_value = 1024; // sensor is 10-bit
 int _pulse_sensor_max_value = 0;
 int _pulse_sensor_min_ttl = 0;
 int _pulse_sensor_max_ttl = 0;
+int _allowed_extrema_deviation = 20;
 
 void robustThresholdUpdate(void){
   int _pulse_sensor_range_change = 0;
@@ -245,12 +242,12 @@ void robustThresholdUpdate(void){
   _pulse_sensor_min_ttl -= 1;
   _pulse_sensor_max_ttl -= 1;
 
-  if( _pulse_sensor_last_value < _pulse_sensor_min_value || _pulse_sensor_min_ttl <= 0 ){
+  if( _pulse_sensor_last_value <= _pulse_sensor_min_value+_allowed_extrema_deviation || _pulse_sensor_min_ttl <= 0 ){
     _pulse_sensor_min_value = _pulse_sensor_last_value;
     _pulse_sensor_min_ttl = SENSOR_RANGE_TIME_TO_LIVE;
     _pulse_sensor_range_change = 1;
   }
-  if( _pulse_sensor_last_value > _pulse_sensor_max_value || _pulse_sensor_max_ttl <= 0 ){
+  if( _pulse_sensor_last_value >= _pulse_sensor_max_value-_allowed_extrema_deviation || _pulse_sensor_max_ttl <= 0 ){
     _pulse_sensor_max_value = _pulse_sensor_last_value;
     _pulse_sensor_max_ttl = SENSOR_RANGE_TIME_TO_LIVE;
     _pulse_sensor_range_change = 1;
@@ -262,6 +259,26 @@ void robustThresholdUpdate(void){
   }
 }
 
+//#ifdef SERIAL_DEBUGGING_ENABLE
+// doesnt seem to work here :( so it's just a hard-coded 0/1
+#if 1
+  void sendDebugInfo( void ){
+    Serial.print(_pulse_sensor_last_value, DEC);
+    Serial.print(",");
+    //Serial.print(_pulse_sensor_min_value, DEC);
+    //Serial.print(",");
+    //Serial.print(_pulse_sensor_max_value, DEC);
+    //Serial.print(",");
+    Serial.print(_pulse_sensor_threshold, DEC);
+    Serial.print(",");
+    Serial.print(debugHeartbeatPulse, DEC);
+    Serial.println();
+  }
+#else
+  void sendDebugInfo( void ){
+  }
+#endif
+
 void loop() {
 
   delay(20);
@@ -272,6 +289,8 @@ void loop() {
     heartbeatOnBeat();
     hrvOnBeat();
   }
+
+  sendDebugInfo();
 
   robustThresholdUpdate();
   breathingUpdate();
