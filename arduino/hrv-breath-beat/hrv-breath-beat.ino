@@ -59,8 +59,12 @@ void setup() {
  * Section on Breathing Animation
  */
 // inhale, hold, exhale
-#define BREATHING_STATE_COUNT 3
-int breathingDurations[] = {200,350,400};
+// #define BREATHING_STATE_COUNT 3
+// int breathingDurations[] = {200,350,400}; // inhale 4, hold 7, exhale 8
+// int breathingDurations[] = {200,200,200}; // inhale 4, hold 4, exhale 4
+// inhale, hold, exhale, hold
+#define BREATHING_STATE_COUNT 4
+int breathingDurations[] = {200,100,200,100}; // inhale 4, hold 2, exhale 4, hold 2
 int breathingStateIndex = 0;
 int breathingFrameIndex = 0;
 
@@ -131,6 +135,10 @@ void breathingUpdate(){
   if( breathingStateIndex % BREATHING_STATE_COUNT == 2 ){
     //drawBreath( &matrix, colors[0], map( breathingFrameIndex, 0, breathingDurations[breathingStateIndex], 255, 128 ) );
     drawBarReverse( &strip, 2, 8, 0, 0, 255, breathingFrameIndex,  breathingDurations[breathingStateIndex] );
+  }
+  if( breathingStateIndex % BREATHING_STATE_COUNT == 3 ){
+    //drawBreath( &matrix, colors[0], map( breathingFrameIndex, 0, breathingDurations[breathingStateIndex], 255, 128 ) );
+    drawBarFull( &strip, 2, 8, 0, 0, 0, 1, 1 );
   }
 }
 
